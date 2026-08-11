@@ -1,0 +1,105 @@
+---
+description: Implementar o Comparador de Regressões em HTML puro (CSS/JS), com upload manual de pasta e exportação HTML, seguindo a referência visual oficial.
+globs: "**/dashboard/**/*.{html,css,js},**/comparador*/**/*.{html,css,js},**/*regress*.{html,css,js}"
+alwaysApply: false
+---
+
+# Dashboard — Comparador de Regressões (HTML puro)
+
+Ao implementar ou alterar o **Comparador de Regressões**, siga esta rule. Stack: **HTML + CSS + JavaScript**. Artefato principal: **página/arquivo `.html`**.
+
+## Referência visual (obrigatória)
+
+Use a imagem abaixo como **fonte da verdade** de layout, hierarquia, cores e indicadores:
+
+![Referência visual do Comparador de Regressões](assets/comparador-regressoes-referencia.png)
+
+Não invente outro layout. Replique a composição da referência.
+
+## Escopo do produto
+
+Dashboard para comparar resultados de regressão a partir de JSONs agrupados por cenário (subpasta), com uma **BASE** escolhida pelo usuário e diff visual por métrica.
+
+## Referência de dados (schema / exemplos)
+
+Não existe um round ID fixo de referência neste repo. A **pasta/arquivos de exemplo são indicados pelo usuário a cada sessão** (ex.: uma pasta de cenário chamada `2026-08-11_10-13` ou similar, seguindo o padrão `YYYY-MM-DD_HH-MM[-SS][__LABEL]` das subpastas do comparador).
+
+- Antes de implementar ou ajustar o parser, **peça ao usuário o caminho/pasta de referência** (ou use a que ele já indicou na conversa) com JSONs reais no padrão `output<ROUND_ID>_<MODEL_TYPE>F.json` (ex.: `..._RELAYSF.json`, `..._DAILY_PLANF.json`).
+- Abrir esses arquivos para confirmar chaves, status, duração e demais campos **antes** de fixar o parsing — não assumir schema de memória/exemplos antigos.
+- O tipo do problema no card (Relays / Daily Plan) deve vir do `MODEL_TYPE` no nome do arquivo ou do conteúdo do JSON.
+
+> Em runtime o dashboard **não** lê nenhuma pasta do disco automaticamente — ver upload abaixo. Pastas de referência servem só para o agente entender o formato durante o desenvolvimento.
+
+## Entrada de dados (upload — obrigatório)
+
+- Os arquivos **não** devem ser carregados automaticamente do disco, de caminho fixo ou de pasta pré-configurada.
+- O usuário **envia/seleciona uma pasta** via upload (ex.: input `webkitdirectory` / seletor de pasta no botão `Selecionar pasta`).
+- Só após o upload a UI lista cenários e habilita a comparação.
+- **Não exibir contagem de arquivos carregados** (ex.: "N arquivo(s) carregado(s)") — é redundante, já que uma pasta inteira é enviada de uma vez.
+- Esperar no upload JSONs no mesmo padrão (`output…_RELAYSF.json`, `output…_DAILY_PLANF.json`, etc.) e o respectivo `hierarchical_solver_summary_<ROUND_ID>.txt` (mesma pasta/round), usado para extrair `Quant. Operadores`.
+- **Abertura do seletor de pasta:** navegadores não permitem que a página force um diretório inicial arbitrário (restrição de segurança). Usar `showDirectoryPicker` (File System Access API) com um `id` fixo para o dashboard quando disponível, para que o navegador **lembre a última pasta usada** e reabra dali nas próximas vezes; manter fallback com `<input webkitdirectory>` para navegadores sem suporte.
+
+## Layout obrigatório (3 blocos)
+
+1. **Cabeçalho + controles**
+   - Título: `Comparador de Regressões`
+   - Subtítulo: `Selecione os cenários, escolha uma base e gere a comparação dos JSONs.`
+   - Botão `Selecionar pasta` (upload da pasta) — sem contador de arquivos carregados
+   - Ações: `Marcar todas`, `Desmarcar todas`, `Gerar comparação`, `Baixar tabela`
+   - **Sem mensagem de contagem pós-comparação** (ex.: "Comparação gerada para N arquivo(s).") — os próprios cards de resultado já mostram o que foi comparado
+
+2. **Cenários encontrados**
+   - Grid de cards (nome tipo `YYYY-MM-DD_HH-MM-SS__LABEL`)
+   - Checkbox para incluir o cenário
+   - Controle **BASE** (um único cenário base); card base em amarelo com selo `BASE`
+
+3. **Resultados da comparação**
+   - Um card por caso, identificado pelo **input** (ex.: `input<ROUND_ID>` ou `…-Ok-input.json`), e o tipo do problema, Ex.: Relays ou Daily Plan
+   - Os dados comparados são lidos do **output** (`output<ROUND_ID>_<MODEL_TYPE>F.json`), mas o card deve **exibir/rotular o caso como input** (nunca mostrar o nome literal do arquivo de output no cabeçalho) — derivar o identificador de input a partir do `ROUND_ID` presente no nome do output
+   - À esquerda o nome do input; à direita timestamp em azul
+   - Tabela de comparação dentro do card
+
+## Tabela e indicadores
+
+Colunas atuais (nesta ordem): `Subpasta`, `Duracao`, `Status`, `Quant. Operadores`, `Operadores Aloca.`, `Percentual de alocação`.
+
+> **Observação:** outras colunas de métricas devem ser **adicionadas somente conforme o pedido do usuário** (ex.: `DemTotais`, `Splits`, `Espera`). Não antecipar colunas extras além das já pedidas.
+
+Fonte dos dados de operadores (extraídos por arquivo, casados pelo ID do round no nome do arquivo):
+
+- `Quant. Operadores`: total de operadores do round — ler do arquivo `hierarchical_solver_summary_<ROUND_ID>.txt` (mesmo ID do output), linha `operators: N`.
+- `Operadores Aloca.`: quantidade de operadores alocados — contar `id_operator` únicos em `allocations` no `output<ROUND_ID>_<MODEL_TYPE>F.json`.
+- `Percentual de alocação`: `Operadores Aloca. / Quant. Operadores`, exibido como percentual.
+
+- Linha BASE: primeira, com badge amarelo `BASE`
+- Demais linhas: valor + rótulo relativo à BASE:
+  - **igual** (cinza) — igual à base
+  - **↓ melhor** (verde) — melhoria vs base
+  - **↑ pior** (vermelho) — regressão vs base
+
+Regra de “melhor/pior”: em geral **menor é melhor** para atraso/espera/splits/não alocadas; **maior é melhor** para `Operadores Aloca.` e `Percentual de alocação`; `Quant. Operadores` é apenas informativo (mostrar `igual`/`diferente`, sem conotação de melhor/pior). Documente no código qualquer exceção.
+
+## Estilo visual
+
+- Fundo claro; cards brancos, cantos arredondados, sombra suave
+- Botões primários em azul
+- BASE em amarelo; `melhor` verde; `pior` vermelho; `igual` cinza
+- Cabeçalho de tabela bege/amarelo claro
+- Tipografia sans-serif limpa; UI em português (labels da referência)
+
+## Stack e entrega
+
+- Implementar em **HTML puro** (+ CSS/JS no browser).
+- Parse e comparação dos JSONs no cliente (JavaScript), a partir da pasta enviada por upload.
+- Permitir **baixar/exportar** a tabela/resultado como `.html` (botão `Baixar tabela` ou equivalente).
+- Não criar branch, não fazer commit, não abrir PR, salvo pedido explícito do usuário
+
+## Checklist antes de concluir
+
+- [ ] Layout alinhado à imagem de referência
+- [ ] Parse alinhado aos outputs `*_RELAYSF` / `*_DAILY_PLANF` reais da pasta de referência indicada pelo usuário
+- [ ] Dados em runtime apenas via upload de pasta (sem carga automática de disco)
+- [ ] Seleção de cenários + BASE única
+- [ ] Comparação por arquivo com indicadores igual/melhor/pior
+- [ ] Exportação/geração de `.html`
+- [ ] Textos e cores em português como na referência
